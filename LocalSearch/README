@@ -1,0 +1,183 @@
+DiscreteOptimizationGPU -- Local Search
+=======================================
+
+Local search coding examples developed for the VeRoLog 2014 conference.
+
+=======================================
+CONTENT
+=======================================
+
+I Overview
+II Usage
+
+=======================================
+OVERVIEW
+=======================================
+
+The following local search code examples were used in the tutorial for the VeRoLog 2014 conference. 
+They can be split into three main categories. CPU local search (sequentially and openmp-parallel), 
+GPU based local search and filtering experiments for the GPU based local search. In each category several 
+implementations of local search are provided, the details explained in the following overview.
+
+All local search examples are based on best improvement local search for the travelling salesman problem with
+swap moves. A swap moves simply exchanges the position of two cities in the solution.
+
+CPU examples
+++++++++++++++++++++++++++++
+
+ls_on_cpu_sequential  
+--------------------
+Simple, sequential local search using 1 core and no parallelism at all.
+
+ls_on_cpu_openmp_1
+--------------------
+Using openmp to utilise all cores/hyper-threads on the CPU. 
+A lexicographical ordering of the moves is used, city combinations are computed from the move index using floating
+point arithmetic.
+
+ls_on_cpu_openmp_2
+--------------------
+The mapping between move index and cities swapped in the move is changed to a mapping that does not need floating point
+arithmetic to avoid errors in the city positions due to floating point arithmetic.
+
+GPU examples
+++++++++++++++++++++++++++++
+
+ls_on_gpu_1
+--------------------
+A first implementation of the local search on the GPU. Based on the "ls_on_cpu_openmp_1" version. Same
+lexicographical ordering of the moves is used, city combinations are computed from the move index using floating
+point arithmetic.
+
+ls_on_gpu_2
+--------------------
+Grid for local search changed to 20160 threads (105 blocks with 192 threads each) on GPU to provide better usage of a GTX 480. 
+The size of the grid has been chosen to best fit the GTX 480 hardware used in the authors computer for testing. To ensure best
+performance on your own GPU, you might want to adjust the number of blocks as well as the number of threads per block.
+
+ls_on_gpu_3
+--------------------
+L1 cache size for the neighbourhood evaluation set to 48KB (L1 preferred). 
+In the previous GPU versions the L1 cache was on default, which is 16KB. Since we do not use shared memory for the evaluation kernel, 
+we can use the "big L1 cache and small shared memory" setup.
+
+ls_on_gpu_4
+--------------------
+Changed which thread on GPU looks at what moves.
+The previous split of moves towards threads was rather naive and provided a bad memory access pattern. This new pattern follows the 
+strided access often used for GPUs. This pattern provides a much better memory access pattern for the neighbourhood evaluation kernel. 
+
+ls_on_gpu_5
+--------------------
+Changed memory access pattern in "find best of thread-best-moves and apply it" kernel ("apply_best_move_kernel") to strided access as well. 
+Very much improved performance.
+
+ls_on_gpu_6
+--------------------
+Reduction, as used in "apply_best_move_kernel", is a standard technique on GPUs. Hence several implementational details improving the performance
+of the reduction are known. Most of them are realised in this version. 
+
+ls_on_gpu_8
+--------------------
+In all GPU versions so far, the lexicographical ordering of moves introduced in "" was used. This mapping from move-index to 
+city combination in swap move is flawed due to problems with floating point arithmetic. Here we change to a different mapping 
+that avoids floating point arithmetic completely. It is the same mapping as used in "ls_on_cpu_openmp_2". 
+
+ls_on_gpu_9
+--------------------
+In all previous examples the cost of an edge was taken to be the euclidean distance. This is very compute inexpensive. To simulate more
+compute intensive moves, here the cost of an edge is modified, including sine and cosine computations to increase the compute effort for a move.
+
+
+Filtering the GPU examples
+++++++++++++++++++++++++++++
+
+Filtering is a standard technique to speed up local search for a sequential implementation. The following filtering versions study how 
+well filtering applies to the GPU based local search. It is based on "ls_on_gpu_8".
+
+Filtering is determined by a random filter array. If the filter array entry for a move index says true, the move is filtered out, otherwise
+it is kept. For simplicity the same filter array is used in all iterations.
+
+ls_on_gpu_filter_1
+--------------------
+Naive filtering with simple if.
+
+ls_on_gpu_filter_2
+--------------------
+In all previous examples the cost of an edge was taken to be the euclidean distance. This is very compute inexpensive. To simulate more
+compute intensive moves, here the cost of an edge is modified, including sine and cosine computations to increase the compute effort for a move.
+Filtering is still done the naive way as in "ls_on_gpu_filter_1".
+
+ls_on_gpu_filter_3
+--------------------
+Changed filtering to usage of compaction: In each iteration a compacted move-index-array is computed from the filter array. This move-index-array
+is used for the moves that have to be evaluated.
+Euclidean edge cost is used.
+
+ls_on_gpu_filter_4
+--------------------
+Changed filtering to usage of compaction: In each iteration a compacted move-index-array is computed from the filter array. This move-index-array
+is used for the moves that have to be evaluated.
+Same expensive edge cost as in "ls_on_gpu_filter_2" is used.
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+In addition to the code for the different local search versions mentioned above, some common helper functions are provided 
+in "Reference_Solutions":
+- A function that compares a provided solution with the solution computed by the sequential local search. 
+  Needs size of problem and number of iterations. 
+- A simple random number generator.
+
+
+=======================================
+USAGE
+=======================================
+
+General
+++++++++++++++++++
+
+For information on how to compile the examples, see the operating system specific parts below.
+
+The CPU examples and the GPU examples 1 to 8 take one optional argument that specifies the problem setup to be used.
+Valid values are 1, 2 or 3. The same value identifies the same problem setup. Example:
+      ls_on_gpu_1__cc20.exe 2
+
+The GPU example 9 and the filtering examples 1 to 4 also take one optional argument with valid values 1, 2, or 3. 
+The problem setup is however different to the ones setup for the CPU examples and GPU examples 1 to 8.
+
+The GPU example 8 takes as valid values for the optional argument also 4, 5, 6. The problem setup identified by the value i
+is the same as the setup identified by the value i-3 for the filtering examples.
+
+In addition the examples come with a python script that runs the examples in a predefined way. The script comes in two flavours,
+     run_examples_cc10.py                  run_examples_cc20.py
+where the cc10 version runs the executables compiled for compute capability 1.0 and the cc20 version the executables compiled for
+compute capability 2.0. The script has to be run from the main directory, e.g.
+$ python scripts/run_examples_cc20.py
+
+
+Windows
+++++++++++++++++++
+
+The code examples come with the following two Visual Studio 2010 solution files: 
+       ls_on_gpu__cc10.sln       ls_on_gpu__cc20.sln
+Both files contain the same examples, the only difference is that in the cc10 version the GPU code
+is compiled with compute capability 1.0 (cc10) and in the cc20 version with compute capability 2.0 (cc20). 
+This is done to illustrate the difference in floating point arithmetic between those compute capabilities. 
+From compute capability 2.0 on, the floating point arithmetic on the GPU is IEEE conform. When compiling the
+different solutions, one executable per example is generated. The executables for the GPU examples have the suffix
+__cc10 or __cc10, depending on chosen compute capability solution.
+
+
+Linux
+++++++++++++++++++
+
+The code examples come with a cmake configuration file. To compile go the the "src" sub-directory, enter
+$ cmake .
+This command should automatically create a Makefile in the src directory. Type
+$ make
+to compile the examples. 
+Each example will be compiled with compute capability 1.0 and compute capability 2.0, creating two binaries for
+each example. One with the suffix __cc10 and one with the suffix __cc20. This is done to illustrate the difference 
+in floating point arithmetic between those compute capabilities. From compute capability 2.0 on, the floating point 
+arithmetic on the GPU is IEEE conform. 
